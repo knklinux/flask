@@ -3,6 +3,12 @@ Version 3.2.0
 
 Unreleased
 
+-   ``SecureCookieSessionInterface`` validates the session cookie name and
+    attributes against :rfc:`6265bis` before using them. A ``__Host-`` or
+    ``__Secure-`` prefixed ``SESSION_COOKIE_NAME`` that user agents would
+    discard, or ``SESSION_COOKIE_PARTITIONED`` without
+    ``SESSION_COOKIE_SECURE``, raises ``RuntimeError`` instead of silently
+    producing a cookie that is never stored.
 -   Drop support for Python 3.9 and 3.10. :pr:`5730` :pr:`6168`
 -   Remove previously deprecated code: ``__version__``. :pr:`5648`
 -   ``RequestContext`` has merged with ``AppContext``. ``RequestContext`` is now

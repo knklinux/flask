@@ -300,6 +300,44 @@ class SecureCookieSessionInterface(SessionInterface):
     serializer = session_json_serializer
     session_class = SecureCookieSession
 
+    def _validate_cookie_settings(self, app: Flask) -> None:
+        """Raise if browsers would reject the configured session cookie.
+
+        :rfc:`6265bis` section 4.1.3 gives the ``__Host-`` and ``__Secure-``
+        prefixes mandatory attribute requirements, and the ``Partitioned``
+        attribute requires ``Secure``. User agents discard a cookie that
+        breaks them without reporting anything back, so a prefixed session
+        cookie would silently never be stored and the session would never
+        persist.
+
+        .. versionadded:: 3.2
+        """
+        name = self.get_cookie_name(app)
+        secure = self.get_cookie_secure(app)
+        problems: list[str] = []
+
+        if name.startswith("__Host-"):
+            if not secure:
+                problems.append("SESSION_COOKIE_SECURE must be True")
+
+            if self.get_cookie_domain(app) is not None:
+                problems.append("SESSION_COOKIE_DOMAIN must not be set")
+
+            if self.get_cookie_path(app) != "/":
+                problems.append('SESSION_COOKIE_PATH must be "/"')
+        elif name.startswith("__Secure-") and not secure:
+            problems.append("SESSION_COOKIE_SECURE must be True")
+
+        if self.get_cookie_partitioned(app) and not secure:
+            problems.append("SESSION_COOKIE_PARTITIONED requires SESSION_COOKIE_SECURE")
+
+        if problems:
+            raise RuntimeError(
+                f"The session cookie name {name!r} cannot be used with the current"
+                f" configuration: {'; '.join(problems)}. Browsers would reject the"
+                " cookie, so the session would never be stored."
+            )
+
     def get_signing_serializer(self, app: Flask) -> URLSafeTimedSerializer | None:
         if not app.secret_key:
             return None
@@ -321,6 +359,7 @@ class SecureCookieSessionInterface(SessionInterface):
         )
 
     def open_session(self, app: Flask, request: Request) -> SecureCookieSession | None:
+        self._validate_cookie_settings(app)
         s = self.get_signing_serializer(app)
         if s is None:
             return None
@@ -337,6 +376,7 @@ class SecureCookieSessionInterface(SessionInterface):
     def save_session(
         self, app: Flask, session: SessionMixin, response: Response
     ) -> None:
+        self._validate_cookie_settings(app)
         name = self.get_cookie_name(app)
         domain = self.get_cookie_domain(app)
         path = self.get_cookie_path(app)
